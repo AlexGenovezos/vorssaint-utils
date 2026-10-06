@@ -11,6 +11,7 @@ struct NotchMusicView: View {
     @ObservedObject private var l10n = L10n.shared
     @ObservedObject private var features = FeatureRuntime.shared
     @ObservedObject private var shuffle = NotchShuffleService.shared
+    @ObservedObject private var spotify = NotchSpotifyService.shared
     @AppStorage(DefaultsKey.notchLyricsEnabled) private var lyricsEnabled = true
     @AppStorage(DefaultsKey.notchQueueEnabled) private var queueEnabled = true
     @AppStorage(DefaultsKey.notchMusicShowVolume) private var showVolume = false
@@ -26,6 +27,20 @@ struct NotchMusicView: View {
     private var showsLyrics: Bool { lyricsEnabled && AppFeature.notchLyrics.isAvailable }
     private var showsQueue: Bool { queueEnabled && AppFeature.notchQueue.isAvailable }
     private var showsVolume: Bool { showVolume && AppFeature.mixer.isAvailable }
+    /// Spotify's own app always has the heart, so it opens with the rest
+    /// of the row and fills in when Spotify answers; not yet connected, it
+    /// leads to setup. Another player, such as the web player, shows it once
+    /// Spotify names the same song.
+    private var showsHeart: Bool {
+        guard AppFeature.notchSpotify.isAvailable, let playback = service.playback else { return false }
+        if playback.track.appBundleIdentifier == NotchSpotifySupport.bundleIdentifier { return true }
+        return spotify.connection == .connected && spotify.saved != nil
+            && spotify.item.map { NotchSpotifySupport.sameSong(playback.track.title, $0.name) } == true
+    }
+    /// The answer belongs to the song on screen, not one Spotify left behind.
+    private var heartAnswered: Bool {
+        spotify.saved != nil && spotify.item.map { NotchSpotifySupport.sameSong(service.playback?.track.title, $0.name) } == true
+    }
     private var openExtra: MusicExtra? {
         guard service.playback != nil else { return nil }
         switch extra {
@@ -92,6 +107,7 @@ struct NotchMusicView: View {
             syncExtras()
             service.refreshAutomation()
             shuffle.refresh(for: service.playback)
+            spotify.reload()
         }
         .onChange(of: extra) { syncExtras() }
         .onChange(of: service.playback.map(NotchMusicIdentity.init)) {
@@ -215,6 +231,7 @@ struct NotchMusicView: View {
 
     /// Lyrics and the queue are toggles, named by their glyphs as a player's own are.
     @ViewBuilder private var extraButtons: some View {
+        if showsHeart { heartButton }
         if showsLyrics {
             extraButton(.lyrics, title: FeatureStrings.notchMusicExtras(l10n.language).lyrics, symbol: "quote.bubble")
         }
@@ -244,6 +261,20 @@ struct NotchMusicView: View {
             .disabled(shuffle.requestingAccess || !shuffle.allowed)
     }
 
+    private var heartButton: some View {
+        let strings = FeatureStrings.notchSpotify(l10n.language)
+        let connected = spotify.connection == .connected
+        let liked = connected && heartAnswered && spotify.saved == true
+        let title = !connected ? strings.connect : spotify.actionFailed ? strings.likeFailed : liked ? strings.unlike : strings.like
+        // Until Spotify answers, a tap has nothing to change; the heart stays
+        // in the row rather than arriving after everything else.
+        return NotchIconButton(symbol: spotify.actionFailed ? "exclamationmark.triangle" : liked ? "heart.fill" : "heart",
+                               title: title, selected: liked) {
+            if !connected { NotchService.shared.openSettings(showing: .music) } else if heartAnswered { spotify.toggleSaved() }
+        }
+        .disabled(spotify.busy)
+    }
+
     /// One row of five equal places across the island, the transport in the
     /// middle three: shuffle before it and the output after it, each place
     /// kept when its button is not offered so play stays in the middle.
@@ -266,7 +297,7 @@ struct NotchMusicView: View {
     /// of buttons, as a phone's island lays out its player.
     private func player(_ playback: NotchPlayback) -> some View {
         VStack(spacing: 0) {
-            head(corner: !band.besideCamera && (showsLyrics || showsQueue || band.pageSectionsButton)) {
+            head(corner: !band.besideCamera && (showsHeart || showsLyrics || showsQueue || band.pageSectionsButton)) {
                 Button { RadialNowPlayingApplication.open(playback.track) } label: {
                     NotchArtwork(image: service.artwork, size: NotchLayout.musicArtworkSize, source: playback.track)
                         .scaleEffect(playback.isPlaying || reduceMotion ? 1 : 0.94)
