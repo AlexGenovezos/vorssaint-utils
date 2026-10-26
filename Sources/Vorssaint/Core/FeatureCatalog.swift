@@ -422,9 +422,9 @@ extension AppFeature {
     }
 
     /// Agents reads local session histories, and the companion changes the
-    /// resting island. Both are separate choices when installing the island.
+    /// resting island. Spotify connects an account. Each is a separate choice.
     static var dynamicIslandInitialExtensions: [AppFeature] {
-        dynamicIslandExtensions.filter { $0 != .notchMascot && $0 != .notchAgents }
+        dynamicIslandExtensions.filter { $0 != .notchMascot && $0 != .notchAgents && $0 != .notchSpotify }
     }
 
     var initialInstallGroup: [AppFeature] {

@@ -27,20 +27,12 @@ struct NotchMusicView: View {
     private var showsLyrics: Bool { lyricsEnabled && AppFeature.notchLyrics.isAvailable }
     private var showsQueue: Bool { queueEnabled && AppFeature.notchQueue.isAvailable }
     private var showsVolume: Bool { showVolume && AppFeature.mixer.isAvailable }
-    /// Spotify's own app always has the heart, so it opens with the rest
-    /// of the row and fills in when Spotify answers; not yet connected, it
-    /// leads to setup. Another player, such as the web player, shows it once
-    /// Spotify names the same song.
+    /// A positively matched browser keeps its retry/reconnect action when
+    /// Spotify rejects a request; a new recording must establish its own match.
     private var showsHeart: Bool {
-        guard AppFeature.notchSpotify.isAvailable, let playback = service.playback else { return false }
-        if playback.track.appBundleIdentifier == NotchSpotifySupport.bundleIdentifier { return true }
-        return spotify.connection == .connected && spotify.saved != nil
-            && spotify.item.map { NotchSpotifySupport.sameSong(playback.track.title, $0.name) } == true
+        spotify.offersHeart(for: service.playback)
     }
-    /// The answer belongs to the song on screen, not one Spotify left behind.
-    private var heartAnswered: Bool {
-        spotify.saved != nil && spotify.item.map { NotchSpotifySupport.sameSong(service.playback?.track.title, $0.name) } == true
-    }
+    private var heartAnswered: Bool { spotify.hasSavedAnswer(for: service.playback) }
     private var openExtra: MusicExtra? {
         guard service.playback != nil else { return nil }
         switch extra {

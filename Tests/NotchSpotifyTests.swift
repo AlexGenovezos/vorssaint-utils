@@ -57,6 +57,16 @@ enum NotchSpotifyTests {
         suite.expect(Spotify.sameSong("Café  del Mar", "cafe del mar") && !Spotify.sameSong("Song", "Song (Live)")
                      && !Spotify.sameSong(nil, "Song") && !Spotify.sameSong("", ""),
                      "the heart only follows the song the island shows")
+        let recording = Spotify.Item(uri: "spotify:track:\(id)", name: "Song", artists: ["Artist"], album: "Album")
+        suite.expect(Spotify.matches(title: "Song", artist: "Artist", album: "Album", identifier: nil, item: recording)
+                     && !Spotify.matches(title: "Song", artist: "Other artist", album: "Album", identifier: nil, item: recording)
+                     && !Spotify.matches(title: "Song", artist: "Artist", album: "Live", identifier: nil, item: recording)
+                     && !Spotify.matches(title: "Song", artist: "", album: "", identifier: nil, item: recording),
+                     "metadata matching distinguishes same-title recordings and rejects missing artist metadata")
+        suite.expect(Spotify.matches(title: "Other title", artist: "", album: "", identifier: recording.uri, item: recording)
+                     && !Spotify.matches(title: "Song", artist: "Artist", album: "Album",
+                                         identifier: "spotify:track:0123456789abcdefghijkl", item: recording),
+                     "a Spotify recording identifier takes precedence over display metadata")
         suite.expect(Spotify.libraryURL("me/library/contains", uri: "spotify:track:\(id)")?.absoluteString
                      == "https://api.spotify.com/v1/me/library/contains?uris=spotify:track:\(id)",
                      "library calls name the song by its URI")
@@ -76,6 +86,8 @@ enum NotchSpotifyTests {
     }
 
     private static func settings(_ suite: TestSuite) {
+        suite.expect(!AppFeature.notch.initialInstallGroup.contains(.notchSpotify),
+                     "installing the island does not opt in to a Spotify account integration")
         suite.expect(SettingsBackupSupport.exportKeys().contains(DefaultsKey.notchSpotifyClientID)
                      && SettingsBackupSupport.exportKeys().contains(AppFeature.notchSpotify.availabilityKey),
                      "the Client ID and the feature choice are accounted for by settings backup")

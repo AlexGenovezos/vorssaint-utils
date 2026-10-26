@@ -113,6 +113,8 @@ enum NotchSpotifySupport {
     struct Item: Equatable {
         let uri: String
         let name: String
+        var artists: [String] = []
+        var album: String? = nil
     }
 
     /// The track or episode the account is playing, on any device.
@@ -121,7 +123,9 @@ enum NotchSpotifySupport {
               let item = object["item"] as? [String: Any],
               let uri = item["uri"] as? String, validItemURI(uri),
               let name = item["name"] as? String else { return nil }
-        return Item(uri: uri, name: name)
+        let artists = (item["artists"] as? [[String: Any]])?.compactMap { $0["name"] as? String } ?? []
+        let album = (item["album"] as? [String: Any])?["name"] as? String
+        return Item(uri: uri, name: name, artists: artists, album: album)
     }
 
     /// Only catalog tracks and episodes can be saved; a local file cannot.
@@ -147,6 +151,19 @@ enum NotchSpotifySupport {
         }
         let left = normal(island), right = normal(spotify)
         return !left.isEmpty && left == right
+    }
+
+    /// Prefer a Spotify identifier. Without one, require artist metadata as
+    /// well as the title; album metadata disambiguates releases when present.
+    static func matches(title: String, artist: String, album: String, identifier: String?, item: Item) -> Bool {
+        if let identifier, validItemURI(identifier) { return identifier == item.uri }
+        guard sameSong(title, item.name), !artist.isEmpty, !item.artists.isEmpty,
+              sameSong(artist, item.artists.joined(separator: ", "))
+                || item.artists.contains(where: { sameSong(artist, $0) }) else { return false }
+        if !album.isEmpty, let spotifyAlbum = item.album, !spotifyAlbum.isEmpty {
+            return sameSong(album, spotifyAlbum)
+        }
+        return true
     }
 
     static func libraryURL(_ path: String, uri: String) -> URL? {

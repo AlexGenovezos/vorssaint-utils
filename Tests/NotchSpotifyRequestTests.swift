@@ -35,7 +35,8 @@ enum NotchSpotifyRequestTests {
         var mutationID: UUID?
         var mutation: Task<Void, Never>?
         var lookup: Task<Void, Never>?
-        var lookupTitle: String? = "Song"
+        var lookupSong: Song?
+        var matchedSong: Song?
         let session = Session()
         let clientID = "0123456789abcdef0123456789abcdef"
         func stopListener() {}
@@ -43,14 +44,32 @@ enum NotchSpotifyRequestTests {
             static func save(_ tokens: NotchSpotifySupport.Tokens) {}
             static func delete() {}
         }
-        struct Song { let title: String?; let bundleIdentifier: String? }
+        init() {
+            let current = NotchSpotifyRequestTests.playback()
+            NotchMusicService.shared.playback = current
+            lookupSong = Song(current)
+            matchedSong = lookupSong
+        }
         enum AppFeature { static let notchSpotify = Feature(); struct Feature { var isAvailable = true } }
         enum NotchMusicService {
-            static let shared = Player()
-            struct Player { var playback: Playback? = nil }
-            struct Playback { var track: Track }
-            struct Track { var title: String?; var appBundleIdentifier: String? }
+            static var shared = Player()
+            struct Player { var playback: NotchPlayback? = nil }
         }
+    }
+
+    static func playback(title: String = "Song", artist: String = "Artist", album: String = "Album",
+                         identifier: String? = nil, revision: UUID? = nil) -> NotchPlayback {
+        let track = RadialNowPlayingSnapshot(title: title, artist: artist, album: album, artworkData: nil,
+                                             appBundleIdentifier: "browser", appPID: 42)
+        return NotchPlayback(track: track, isPlaying: true, elapsed: 0, duration: 180, rate: 1,
+                             sampledAt: Date(), canSeek: false, itemIdentifier: identifier,
+                             commandContext: revision.map { NotchPlaybackContext(pid: 42, revision: $0) })
+    }
+
+    @MainActor struct MusicView {
+        var service: Service.NotchMusicService.Player
+        let spotify: Service
+        typealias AppFeature = Service.AppFeature
     }
 
     static func run(_ suite: TestSuite) {
@@ -58,6 +77,17 @@ enum NotchSpotifyRequestTests {
         Task { @MainActor in
             await mutations(suite)
             await accessFailures(suite)
+            let sameTitle = Service()
+            sameTitle.refresh(.init(playback(artist: "Another artist")))
+            suite.expect(sameTitle.saved == nil && sameTitle.item == nil,
+                         "a different recording with the same title invalidates the previous save target")
+            sameTitle.lookup?.cancel()
+            let browser = Service()
+            browser.item = .init(uri: "spotify:track:4uLU6hMCjMI75M1A2tKUQC", name: "Song")
+            browser.saved = nil
+            browser.actionFailed = true
+            let view = MusicView(service: .init(playback: playback()), spotify: browser)
+            suite.expect(view.showsHeart, "a matched browser song retains its warning and retry control")
             finished = true
         }
         let deadline = Date().addingTimeInterval(10)
@@ -105,6 +135,17 @@ enum NotchSpotifyRequestTests {
         await settle { !service.busy }
         suite.expect(service.saved == false && !service.actionFailed, "a successful retry clears the error")
 
+        let revisionChange = Service()
+        revisionChange.toggleSaved()
+        await settle { !revisionChange.session.pending.isEmpty }
+        revisionChange.refresh(.init(playback(revision: UUID())))
+        suite.expect(revisionChange.item == nil && revisionChange.saved == nil && !revisionChange.busy,
+                     "a new playback revision retires a pending save even when title and artist match")
+        revisionChange.lookup?.cancel()
+        revisionChange.session.finish(204)
+        for _ in 0..<10 { await Task.yield() }
+        suite.expect(revisionChange.saved == nil, "a prior recording's completion cannot restore its heart")
+
         let stale = Service()
         stale.toggleSaved()
         await settle { !stale.session.pending.isEmpty }
@@ -117,10 +158,10 @@ enum NotchSpotifyRequestTests {
         let changed = Service()
         changed.toggleSaved()
         await settle { !changed.session.pending.isEmpty }
-        changed.refresh(.init(title: "Other song", bundleIdentifier: "browser"))
+        changed.refresh(.init(playback(title: "Other song")))
         await settle { changed.session.pending.count == 2 }
         changed.session.finish(204) // Old save completes after the new song starts loading.
-        changed.session.finish(200, #"{"item":{"uri":"spotify:track:0123456789abcdefghijkl","name":"Other song"}}"#)
+        changed.session.finish(200, #"{"item":{"uri":"spotify:track:0123456789abcdefghijkl","name":"Other song","artists":[{"name":"Artist"}],"album":{"name":"Album"}}}"#)
         await settle { !changed.session.pending.isEmpty }
         changed.session.finish(200, "[false]")
         await settle { changed.item?.name == "Other song" }
@@ -136,6 +177,12 @@ enum NotchSpotifyRequestTests {
         await settle { !denied.busy }
         suite.expect(denied.needsReconnect && denied.connection == .failed && denied.saved == nil,
                      "forbidden access clears stale saved state and asks to reconnect")
+
+        let browserPlayback = playback()
+        suite.expect(denied.offersHeart(for: browserPlayback) && !denied.hasSavedAnswer(for: browserPlayback),
+                     "rejected access retains the matched browser's reconnect action without stale saved state")
+        suite.expect(!denied.offersHeart(for: playback(artist: "Other artist")),
+                     "a different browser recording cannot inherit another song's reconnect action")
 
         let expired = Service()
         expired.toggleSaved()

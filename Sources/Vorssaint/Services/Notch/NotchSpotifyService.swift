@@ -17,7 +17,7 @@ final class NotchSpotifyService: ObservableObject {
 
     enum Connection: Equatable { case disconnected, connecting, connected, failed }
     @Published private(set) var connection: Connection = .disconnected
-    /// The song Spotify reports, once it matches the island's title.
+    /// The song Spotify reports, once it matches the island's recording.
     @Published private(set) var item: NotchSpotifySupport.Item?
     @Published private(set) var saved: Bool?
     @Published private(set) var busy = false
@@ -27,7 +27,8 @@ final class NotchSpotifyService: ObservableObject {
     private var tokens: NotchSpotifySupport.Tokens?
     private var listener: NWListener?
     private var lookup: Task<Void, Never>?
-    private var lookupTitle: String?
+    @Published private(set) var matchedSong: Song?
+    private var lookupSong: Song?
     private var accountGeneration = UUID()
     private var mutationID: UUID?
     private var mutation: Task<Void, Never>?
@@ -84,15 +85,39 @@ final class NotchSpotifyService: ObservableObject {
         guard AppFeature.notchSpotify.isAvailable else { stop(); return }
         guard playbackObserver == nil else { return }
         playbackObserver = NotchMusicService.shared.$playback
-            .map { Song(title: $0?.track.title, bundleIdentifier: $0?.track.appBundleIdentifier) }
+            .map { Song($0) }
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] song in MainActor.assumeIsolated { self?.refresh(song) } }
     }
 
     struct Song: Equatable {
-        let title: String?
-        let bundleIdentifier: String?
+        let recording: NotchMusicIdentity?
+        let context: NotchPlaybackContext?
+
+        init(_ playback: NotchPlayback?) {
+            recording = playback.map(NotchMusicIdentity.init)
+            context = playback?.commandContext
+        }
+
+        var title: String? { recording?.title }
+        var bundleIdentifier: String? { recording?.bundle }
+
+        func matches(_ item: NotchSpotifySupport.Item) -> Bool {
+            guard let recording else { return false }
+            return NotchSpotifySupport.matches(title: recording.title, artist: recording.artist,
+                                               album: recording.album, identifier: recording.itemIdentifier, item: item)
+        }
+    }
+
+    func offersHeart(for playback: NotchPlayback?) -> Bool {
+        guard AppFeature.notchSpotify.isAvailable, let playback else { return false }
+        return playback.track.appBundleIdentifier == NotchSpotifySupport.bundleIdentifier
+            || matchedSong == Song(playback)
+    }
+
+    func hasSavedAnswer(for playback: NotchPlayback?) -> Bool {
+        playback != nil && saved != nil && item != nil && matchedSong == Song(playback)
     }
 
     /// Turning the feature off ends any sign-in and lookup but keeps the
@@ -127,14 +152,17 @@ final class NotchSpotifyService: ObservableObject {
         accountGeneration = UUID()
         lookup?.cancel()
         lookup = nil
-        lookupTitle = nil
+        lookupSong = nil
+        matchedSong = nil
         cancelMutation()
         item = nil
         saved = nil
     }
 
     private func accessLost() {
+        let previousMatch = matchedSong
         disconnect()
+        matchedSong = previousMatch
         needsReconnect = true
         actionFailed = true
         connection = .failed
@@ -245,17 +273,18 @@ final class NotchSpotifyService: ObservableObject {
     /// can trail the island by a moment after a skip, so a different name
     /// from Spotify's own app is tried again before the heart gives up on
     /// it. Another player's song is asked about once, for the web player.
-    private func refresh(_ song: Song) {
+    private func refresh(_ song: Song, force: Bool = false) {
         let title = song.title
         guard connection == .connected, AppFeature.notchSpotify.isAvailable else { return }
-        guard title != lookupTitle else { return }
-        if item.map({ !NotchSpotifySupport.sameSong(title, $0.name) }) ?? true {
+        guard force || song != lookupSong else { return }
+        if matchedSong != song {
             cancelMutation()
             item = nil
             saved = nil
+            matchedSong = nil
         } else if busy { return }
         actionFailed = false
-        lookupTitle = title
+        lookupSong = song
         lookup?.cancel()
         guard title != nil else { return }
         lookup = Task { [weak self] in
@@ -264,7 +293,8 @@ final class NotchSpotifyService: ObservableObject {
                 if attempt > 0 { try? await Task.sleep(for: .seconds(1.5)) }
                 guard let self, !Task.isCancelled else { return }
                 guard let current = await self.currentItem() else { continue }
-                guard !Task.isCancelled, NotchSpotifySupport.sameSong(title, current.name) else { continue }
+                guard !Task.isCancelled, song.matches(current) else { continue }
+                self.matchedSong = song
                 let saved = await self.contains(current.uri)
                 guard !Task.isCancelled else { return }
                 self.item = current
@@ -283,14 +313,13 @@ final class NotchSpotifyService: ObservableObject {
     /// on screen until the new one lands.
     func reload() {
         guard !busy else { return }
-        lookupTitle = nil
-        let playback = NotchMusicService.shared.playback
-        refresh(Song(title: playback?.track.title, bundleIdentifier: playback?.track.appBundleIdentifier))
+        refresh(Song(NotchMusicService.shared.playback), force: true)
     }
 
     func toggleSaved() {
         guard connection == .connected, AppFeature.notchSpotify.isAvailable,
-              let item, let saved, !busy else { return }
+              let item, let saved, !busy,
+              matchedSong == Song(NotchMusicService.shared.playback) else { return }
         lookup?.cancel()
         busy = true
         actionFailed = false
