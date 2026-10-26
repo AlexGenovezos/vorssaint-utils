@@ -8,8 +8,10 @@ Original authorship is retained. No duplicate upstream PR is needed.
 ## Scope and integration
 
 Like/unlike the current Spotify song and display its saved state. No library
-browser or Spotify queue. The heart shares the current music page's extras row;
-the current transport, output picker, and optional volume slider remain.
+browser or Spotify queue. The heart occupies the trailing playback-row slot
+below the camera, using the same style as shuffle. It replaces the output picker
+while available; otherwise that slot keeps the output picker. The optional
+volume slider remains.
 The integration is optional and uses the PR's browser OAuth PKCE flow and
 owner-only local token file, excluded from settings backups. The client ID is
 saved in settings and can be included in backups.
