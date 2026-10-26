@@ -264,14 +264,25 @@ struct NotchMusicView: View {
         let strings = FeatureStrings.notchSpotify(l10n.language)
         let connected = spotify.connection == .connected
         let liked = connected && heartAnswered && spotify.saved == true
-        let title = !connected ? strings.connect : spotify.actionFailed ? strings.likeFailed : liked ? strings.unlike : strings.like
+        let title = spotify.needsReconnect ? strings.accessLost
+            : !connected ? strings.connect
+            : spotify.busy ? strings.updating
+            : spotify.actionFailed ? strings.likeFailed
+            : liked ? strings.unlike : strings.like
         // Until Spotify answers, a tap has nothing to change; the heart stays
         // in the row rather than arriving after everything else.
-        return NotchMusicSideButton(symbol: spotify.actionFailed ? "exclamationmark.triangle" : liked ? "heart.fill" : "heart",
+        return NotchMusicSideButton(symbol: spotify.busy ? "arrow.triangle.2.circlepath"
+                                    : spotify.actionFailed ? "exclamationmark.triangle" : liked ? "heart.fill" : "heart",
                                     title: title, active: liked, tint: accent) {
-            if !connected { NotchService.shared.openSettings(showing: .music) } else if heartAnswered { spotify.toggleSaved() }
+            if !connected {
+                NotchService.shared.openSettings(showing: .music)
+            } else if heartAnswered {
+                spotify.toggleSaved()
+            } else if spotify.actionFailed {
+                spotify.reload()
+            }
         }
-        .disabled(spotify.busy)
+        .disabled(spotify.busy || (connected && !heartAnswered && !spotify.actionFailed))
     }
 
     /// One row of five equal places across the island, the transport in the

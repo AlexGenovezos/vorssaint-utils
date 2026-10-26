@@ -1860,6 +1860,18 @@ def main():
           + declaration(dock, "    private func isNearDock(").replace("private func", "func", 1)
           + "}\n")
 
+    spotify = "Sources/Vorssaint/Services/Notch/NotchSpotifyService.swift"
+    write("NotchSpotifyRequests.swift", "import Foundation\nextension NotchSpotifyRequestTests.Service {\n"
+          + "".join(declaration(spotify, prefix).replace("private func", "func", 1)
+                    for prefix in ["    func toggleSaved()", "    private func send(",
+                                   "    private func api(", "    private func accessToken()",
+                                   "    private func tokenRequest(", "    private func store(",
+                                   "    func disconnect()", "    private func currentItem()",
+                                   "    private func contains(", "    private func refresh(",
+                                   "    func reload()", "    private func cancelMutation()",
+                                   "    private func invalidateRequests()", "    private func accessLost()"])
+          + "}\n")
+
     lyrics = "Sources/Vorssaint/Services/Notch/NotchLyricsService.swift"
     write("NotchLyricsLifecycle.swift", "import Foundation\nimport UniformTypeIdentifiers\n\nextension NotchLyricsContract {\n"
           + "final class Service {\nvar memory = NotchLyricsMemory()\n"

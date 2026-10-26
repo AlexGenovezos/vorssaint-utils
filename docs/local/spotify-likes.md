@@ -32,6 +32,19 @@ saved in settings and can be included in backups.
 The separate Developer app has its own preferences and macOS permissions.
 Its automatic app updater is disabled, so official releases cannot replace it.
 
+## Request feedback
+
+The heart changes its saved state only after Spotify accepts the save/remove
+request. During the request it shows an updating indicator and ignores further
+clicks. Failed requests keep the last confirmed state and a warning until retry
+or a song change. Opening the page also refreshes its state.
+
+An HTTP 401 triggers one token refresh and one retry. A second 401, a 403, or a
+revoked refresh token clears stale state and asks to restore Web API access and
+reconnect in settings. Offline errors, rate limits, and server failures preserve
+the account. Late replies from a previous song or disconnected account cannot
+change the current heart or restore credentials.
+
 ## Update procedure
 
 Keep local work committed before updating. Fetch upstream and merge its current

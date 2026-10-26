@@ -26,6 +26,8 @@ struct NotchSpotifyStrings {
     let like: String
     let unlike: String
     let likeFailed: String
+    let updating: String
+    let accessLost: String
     /// Shown in the browser tab once sign-in hands control back.
     let signedIn: String
 }
@@ -55,6 +57,8 @@ extension FeatureStrings {
             like: "Add to Liked Songs",
             unlike: "Remove from Liked Songs",
             likeFailed: "Could not update Liked Songs.",
+            updating: "Updating Liked Songs…",
+            accessLost: "Spotify access was denied. Check Web API access in your Spotify app, then reconnect.",
             signedIn: "Signed in. You can close this tab and return to Vorssaint.")
         case .ptBR: return NotchSpotifyStrings(
             feature: "Curtidas do Spotify",
@@ -78,6 +82,8 @@ extension FeatureStrings {
             like: "Adicionar às Músicas Curtidas",
             unlike: "Remover das Músicas Curtidas",
             likeFailed: "Não foi possível atualizar as Músicas Curtidas.",
+            updating: "Atualizando Músicas Curtidas…",
+            accessLost: "O acesso ao Spotify foi negado. Confira o acesso à Web API no seu app do Spotify e conecte novamente.",
             signedIn: "Login concluído. Você pode fechar esta aba e voltar ao Vorssaint.")
         case .tr: return NotchSpotifyStrings(
             feature: "Spotify beğenileri",
@@ -101,6 +107,8 @@ extension FeatureStrings {
             like: "Beğenilen Şarkılara ekle",
             unlike: "Beğenilen Şarkılardan kaldır",
             likeFailed: "Beğenilen Şarkılar güncellenemedi.",
+            updating: "Beğenilen Şarkılar güncelleniyor…",
+            accessLost: "Spotify erişimi reddedildi. Spotify uygulamanızdaki Web API erişimini kontrol edip yeniden bağlanın.",
             signedIn: "Giriş yapıldı. Bu sekmeyi kapatıp Vorssaint’e dönebilirsiniz.")
         case .ru: return NotchSpotifyStrings(
             feature: "Лайки Spotify",
@@ -124,6 +132,8 @@ extension FeatureStrings {
             like: "Добавить в «Любимые треки»",
             unlike: "Убрать из «Любимых треков»",
             likeFailed: "Не удалось обновить «Любимые треки».",
+            updating: "Обновление любимых треков…",
+            accessLost: "Spotify отказал в доступе. Проверьте доступ к Web API в своём приложении Spotify и подключитесь снова.",
             signedIn: "Вход выполнен. Можно закрыть эту вкладку и вернуться в Vorssaint.")
         case .es: return NotchSpotifyStrings(
             feature: "Me gusta de Spotify",
@@ -147,6 +157,8 @@ extension FeatureStrings {
             like: "Añadir a Canciones que te gustan",
             unlike: "Quitar de Canciones que te gustan",
             likeFailed: "No se pudo actualizar Canciones que te gustan.",
+            updating: "Actualizando Canciones que te gustan…",
+            accessLost: "Spotify denegó el acceso. Revisa el acceso a Web API en tu app de Spotify y vuelve a conectar.",
             signedIn: "Sesión iniciada. Puedes cerrar esta pestaña y volver a Vorssaint.")
         case .sk: return NotchSpotifyStrings(
             feature: "Obľúbené v Spotify",
@@ -170,6 +182,8 @@ extension FeatureStrings {
             like: "Pridať do Obľúbených skladieb",
             unlike: "Odstrániť z Obľúbených skladieb",
             likeFailed: "Obľúbené skladby sa nepodarilo aktualizovať.",
+            updating: "Aktualizujú sa obľúbené skladby…",
+            accessLost: "Spotify zamietlo prístup. Skontrolujte prístup k Web API vo svojej aplikácii Spotify a znova sa pripojte.",
             signedIn: "Prihlásenie prebehlo. Túto kartu môžete zavrieť a vrátiť sa do Vorssaint.")
         case .de: return NotchSpotifyStrings(
             feature: "Spotify-Likes",
@@ -193,6 +207,8 @@ extension FeatureStrings {
             like: "Zu Lieblingssongs hinzufügen",
             unlike: "Aus Lieblingssongs entfernen",
             likeFailed: "Lieblingssongs konnten nicht aktualisiert werden.",
+            updating: "Lieblingssongs werden aktualisiert…",
+            accessLost: "Spotify hat den Zugriff verweigert. Prüfe den Web-API-Zugriff deiner Spotify-App und verbinde dich erneut.",
             signedIn: "Angemeldet. Du kannst diesen Tab schließen und zu Vorssaint zurückkehren.")
         case .fr: return NotchSpotifyStrings(
             feature: "J’aime Spotify",
@@ -216,6 +232,8 @@ extension FeatureStrings {
             like: "Ajouter aux Titres likés",
             unlike: "Retirer des Titres likés",
             likeFailed: "Impossible de mettre à jour les Titres likés.",
+            updating: "Mise à jour des titres likés…",
+            accessLost: "Spotify a refusé l’accès. Vérifiez l’accès à Web API dans votre application Spotify, puis reconnectez-vous.",
             signedIn: "Connexion réussie. Vous pouvez fermer cet onglet et revenir à Vorssaint.")
         case .it: return NotchSpotifyStrings(
             feature: "Mi piace di Spotify",
@@ -239,6 +257,8 @@ extension FeatureStrings {
             like: "Aggiungi ai Brani che ti piacciono",
             unlike: "Rimuovi dai Brani che ti piacciono",
             likeFailed: "Impossibile aggiornare i Brani che ti piacciono.",
+            updating: "Aggiornamento dei brani preferiti…",
+            accessLost: "Spotify ha negato l’accesso. Controlla l’accesso alla Web API nella tua app Spotify, poi riconnettiti.",
             signedIn: "Accesso eseguito. Puoi chiudere questa scheda e tornare a Vorssaint.")
         case .ja: return NotchSpotifyStrings(
             feature: "Spotify のお気に入り",
@@ -262,6 +282,8 @@ extension FeatureStrings {
             like: "お気に入りの曲に追加",
             unlike: "お気に入りの曲から削除",
             likeFailed: "お気に入りの曲を更新できませんでした。",
+            updating: "お気に入りの曲を更新中…",
+            accessLost: "Spotifyへのアクセスが拒否されました。SpotifyアプリのWeb APIアクセスを確認して、再接続してください。",
             signedIn: "サインインしました。このタブを閉じて Vorssaint に戻ってください。")
         case .ko: return NotchSpotifyStrings(
             feature: "Spotify 좋아요",
@@ -285,6 +307,8 @@ extension FeatureStrings {
             like: "좋아요 표시한 곡에 추가",
             unlike: "좋아요 표시한 곡에서 제거",
             likeFailed: "좋아요 표시한 곡을 업데이트할 수 없습니다.",
+            updating: "좋아요 표시한 곡 업데이트 중…",
+            accessLost: "Spotify 접근이 거부되었습니다. Spotify 앱의 Web API 접근 설정을 확인한 후 다시 연결하세요.",
             signedIn: "로그인되었습니다. 이 탭을 닫고 Vorssaint로 돌아가세요.")
         case .uk: return NotchSpotifyStrings(
             feature: "Вподобання Spotify",
@@ -308,6 +332,8 @@ extension FeatureStrings {
             like: "Додати до «Улюблених треків»",
             unlike: "Прибрати з «Улюблених треків»",
             likeFailed: "Не вдалося оновити «Улюблені треки».",
+            updating: "Оновлення улюблених треків…",
+            accessLost: "Spotify відхилив доступ. Перевірте доступ до Web API у своєму застосунку Spotify та підключіться знову.",
             signedIn: "Вхід виконано. Можна закрити цю вкладку й повернутися до Vorssaint.")
         case .zhHans: return NotchSpotifyStrings(
             feature: "Spotify 点赞",
@@ -331,6 +357,8 @@ extension FeatureStrings {
             like: "加入已点赞的歌曲",
             unlike: "从已点赞的歌曲中移除",
             likeFailed: "无法更新已点赞的歌曲。",
+            updating: "正在更新已点赞的歌曲…",
+            accessLost: "Spotify 拒绝了访问。请检查你的 Spotify 应用的 Web API 访问设置，然后重新连接。",
             signedIn: "已登录。你可以关闭此标签页并返回 Vorssaint。")
         case .zhTW: return NotchSpotifyStrings(
             feature: "Spotify 按讚",
@@ -354,6 +382,8 @@ extension FeatureStrings {
             like: "加入已按讚的歌曲",
             unlike: "從已按讚的歌曲中移除",
             likeFailed: "無法更新已按讚的歌曲。",
+            updating: "正在更新已按讚的歌曲…",
+            accessLost: "Spotify 拒絕存取。請檢查你的 Spotify 應用程式的 Web API 存取設定，然後重新連線。",
             signedIn: "已登入。你可以關閉此分頁並返回 Vorssaint。")
         case .zhHK: return NotchSpotifyStrings(
             feature: "Spotify 讚好",
@@ -377,6 +407,8 @@ extension FeatureStrings {
             like: "加入已讚好的歌曲",
             unlike: "從已讚好的歌曲中移除",
             likeFailed: "無法更新已讚好的歌曲。",
+            updating: "正在更新已讚好的歌曲…",
+            accessLost: "Spotify 拒絕存取。請檢查你的 Spotify 應用程式的 Web API 存取設定，然後重新連線。",
             signedIn: "已登入。你可以關閉此分頁並返回 Vorssaint。")
         }
     }

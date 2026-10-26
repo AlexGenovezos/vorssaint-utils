@@ -21,6 +21,13 @@ struct NotchSpotifySettings: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
+            if spotify.needsReconnect || spotify.actionFailed {
+                Label(spotify.needsReconnect ? text.accessLost : text.likeFailed,
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, settingsRowTextInset)
+            }
             if spotify.connection != .connected { setup.padding(.leading, settingsRowTextInset) }
         }
         .animation(.smooth(duration: 0.25), value: spotify.connection)
@@ -151,7 +158,7 @@ struct NotchSpotifySettings: View {
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if spotify.connection == .failed {
+            if spotify.connection == .failed && !spotify.needsReconnect {
                 Label(text.connectFailed, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)

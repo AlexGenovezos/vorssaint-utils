@@ -22,12 +22,15 @@ final class NotchSpotifyService: ObservableObject {
     @Published private(set) var saved: Bool?
     @Published private(set) var busy = false
     @Published private(set) var actionFailed = false
+    @Published private(set) var needsReconnect = false
 
     private var tokens: NotchSpotifySupport.Tokens?
     private var listener: NWListener?
     private var lookup: Task<Void, Never>?
     private var lookupTitle: String?
-    private var failureReset: Task<Void, Never>?
+    private var accountGeneration = UUID()
+    private var mutationID: UUID?
+    private var mutation: Task<Void, Never>?
     private var signInTimeout: Task<Void, Never>?
     private var playbackObserver: AnyCancellable?
     private let session: URLSession
@@ -56,6 +59,9 @@ final class NotchSpotifyService: ObservableObject {
         guard connection != .connecting, AppFeature.notchSpotify.isAvailable else { return }
         let clientID = clientID
         guard NotchSpotifySupport.validClientID(clientID) else { connection = .failed; return }
+        invalidateRequests()
+        needsReconnect = false
+        actionFailed = false
         let verifier = NotchSpotifySupport.randomToken()
         let state = NotchSpotifySupport.randomToken(bytes: 16)
         guard let url = NotchSpotifySupport.authorizationURL(clientID: clientID, verifier: verifier, state: state),
@@ -96,21 +102,42 @@ final class NotchSpotifyService: ObservableObject {
         playbackObserver = nil
         if connection == .connecting { connection = tokens == nil ? .disconnected : .connected }
         stopListener()
-        lookup?.cancel()
-        lookupTitle = nil
-        item = nil
-        saved = nil
+        invalidateRequests()
+        actionFailed = false
     }
 
     func disconnect() {
         stopListener()
-        lookup?.cancel()
-        lookupTitle = nil
+        invalidateRequests()
         tokens = nil
         TokenStore.delete()
+        needsReconnect = false
+        actionFailed = false
+        connection = .disconnected
+    }
+
+    private func cancelMutation() {
+        mutationID = nil
+        mutation?.cancel()
+        mutation = nil
+        busy = false
+    }
+
+    private func invalidateRequests() {
+        accountGeneration = UUID()
+        lookup?.cancel()
+        lookup = nil
+        lookupTitle = nil
+        cancelMutation()
         item = nil
         saved = nil
-        connection = .disconnected
+    }
+
+    private func accessLost() {
+        disconnect()
+        needsReconnect = true
+        actionFailed = true
+        connection = .failed
     }
 
     private func startListener(clientID: String, verifier: String, state: String) -> Bool {
@@ -162,11 +189,16 @@ final class NotchSpotifyService: ObservableObject {
         let body = NotchSpotifySupport.formBody([("grant_type", "authorization_code"), ("code", code),
                                                  ("redirect_uri", NotchSpotifySupport.redirectURI),
                                                  ("client_id", clientID), ("code_verifier", verifier)])
-        guard let (data, status) = await tokenRequest(body), status == 200,
+        let generation = accountGeneration
+        let reply = await tokenRequest(body)
+        guard generation == accountGeneration, !Task.isCancelled else { return }
+        guard let (data, status) = reply, status == 200,
               let tokens = NotchSpotifySupport.tokens(from: data) else {
             connection = .failed; return
         }
         store(tokens)
+        needsReconnect = false
+        actionFailed = false
         connection = .connected
         reload()
     }
@@ -194,9 +226,13 @@ final class NotchSpotifyService: ObservableObject {
         if tokens.isFresh() { return tokens.accessToken }
         let body = NotchSpotifySupport.formBody([("grant_type", "refresh_token"), ("refresh_token", tokens.refreshToken),
                                                  ("client_id", clientID)])
-        guard let (data, status) = await tokenRequest(body) else { return nil }
+        let generation = accountGeneration
+        let reply = await tokenRequest(body)
+        guard generation == accountGeneration, !Task.isCancelled else { return nil }
+        guard let (data, status) = reply else { actionFailed = true; return nil }
         guard status == 200, let renewed = NotchSpotifySupport.tokens(from: data, previousRefreshToken: tokens.refreshToken) else {
-            if NotchSpotifySupport.refreshRevoked(status: status) { disconnect(); connection = .failed }
+            if NotchSpotifySupport.refreshRevoked(status: status) { accessLost() }
+            else { actionFailed = true }
             return nil
         }
         store(renewed)
@@ -213,9 +249,14 @@ final class NotchSpotifyService: ObservableObject {
         let title = song.title
         guard connection == .connected, AppFeature.notchSpotify.isAvailable else { return }
         guard title != lookupTitle else { return }
+        if item.map({ !NotchSpotifySupport.sameSong(title, $0.name) }) ?? true {
+            cancelMutation()
+            item = nil
+            saved = nil
+        } else if busy { return }
+        actionFailed = false
         lookupTitle = title
         lookup?.cancel()
-        if item.map({ !NotchSpotifySupport.sameSong(title, $0.name) }) ?? true { item = nil; saved = nil }
         guard title != nil else { return }
         lookup = Task { [weak self] in
             let attempts = song.bundleIdentifier == NotchSpotifySupport.bundleIdentifier ? 3 : 1
@@ -228,8 +269,12 @@ final class NotchSpotifyService: ObservableObject {
                 guard !Task.isCancelled else { return }
                 self.item = current
                 self.saved = saved
+                self.actionFailed = saved == nil
                 return
             }
+            guard let self, !Task.isCancelled else { return }
+            self.item = nil
+            self.saved = nil
         }
     }
 
@@ -237,31 +282,38 @@ final class NotchSpotifyService: ObservableObject {
     /// have been liked on another device. The heart keeps its last answer
     /// on screen until the new one lands.
     func reload() {
+        guard !busy else { return }
         lookupTitle = nil
         let playback = NotchMusicService.shared.playback
         refresh(Song(title: playback?.track.title, bundleIdentifier: playback?.track.appBundleIdentifier))
     }
 
     func toggleSaved() {
-        guard let item, let saved, !busy else { return }
+        guard connection == .connected, AppFeature.notchSpotify.isAvailable,
+              let item, let saved, !busy else { return }
+        lookup?.cancel()
         busy = true
         actionFailed = false
         let wanted = !saved
-        self.saved = wanted
-        Task { [weak self] in
+        let requestID = UUID()
+        let generation = accountGeneration
+        mutationID = requestID
+        mutation = Task { [weak self] in
             guard let self else { return }
-            let done = await self.send(wanted ? "PUT" : "DELETE", uri: item.uri)
-            self.busy = false
-            guard self.item == item else { return }
-            if !done {
-                self.saved = !wanted
-                self.actionFailed = true
-                self.failureReset?.cancel()
-                self.failureReset = Task { [weak self] in
-                    try? await Task.sleep(for: .seconds(2))
-                    if !Task.isCancelled { self?.actionFailed = false }
+            defer {
+                if self.mutationID == requestID {
+                    self.busy = false
+                    self.mutationID = nil
+                    self.mutation = nil
                 }
             }
+            let done = await self.send(wanted ? "PUT" : "DELETE", uri: item.uri)
+            guard !Task.isCancelled, self.accountGeneration == generation,
+                  self.mutationID == requestID, self.item == item else { return }
+            // Only Spotify's successful response confirms a change. A failed
+            // request keeps the last known state and a persistent retry hint.
+            if done { self.saved = wanted }
+            self.actionFailed = !done
         }
     }
 
@@ -286,14 +338,35 @@ final class NotchSpotifyService: ObservableObject {
     }
 
     private func api(_ method: String, url: URL) async -> (Data, Int)? {
-        guard let token = await accessToken() else { return nil }
-        var request = URLRequest(url: url)
-        request.httpMethod = method
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        guard let (data, response) = try? await session.data(for: request),
-              let status = (response as? HTTPURLResponse)?.statusCode else { return nil }
-        if status == 401 { tokens?.expiresAt = .distantPast }
-        return (data, status)
+        let generation = accountGeneration
+        guard var token = await accessToken(), generation == accountGeneration, !Task.isCancelled else { return nil }
+        // A 401 may just be an expired token. Refresh and retry once; a second
+        // 401 or a 403 requires the person to restore access and reconnect.
+        for attempt in 0..<2 {
+            var request = URLRequest(url: url)
+            request.httpMethod = method
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            let reply = try? await session.data(for: request)
+            guard generation == accountGeneration, !Task.isCancelled else { return nil }
+            guard let (data, response) = reply,
+                  let status = (response as? HTTPURLResponse)?.statusCode else {
+                actionFailed = true
+                return nil
+            }
+            if status == 401, attempt == 0 {
+                tokens?.expiresAt = .distantPast
+                guard let renewed = await accessToken(), generation == accountGeneration, !Task.isCancelled else { return nil }
+                token = renewed
+                continue
+            }
+            if status == 401 || status == 403 {
+                accessLost()
+                return nil
+            }
+            if status >= 400 { actionFailed = true }
+            return (data, status)
+        }
+        return nil
     }
 
     // MARK: Storage

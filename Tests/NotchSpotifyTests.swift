@@ -5,6 +5,7 @@ import Foundation
 
 enum NotchSpotifyTests {
     static func run(_ suite: TestSuite) {
+        NotchSpotifyRequestTests.run(suite)
         support(suite)
         listener(suite)
         settings(suite)
@@ -82,7 +83,7 @@ enum NotchSpotifyTests {
                      "Spotify likes are opt-in and ask for no system permission")
         for language in AppLanguage.allCases {
             let strings = Mirror(reflecting: FeatureStrings.notchSpotify(language)).children.compactMap { $0.value as? String }
-            suite.expect(strings.count == 22 && strings.allSatisfy { !$0.isEmpty && !$0.contains("—") },
+            suite.expect(strings.count == 24 && strings.allSatisfy { !$0.isEmpty && !$0.contains("—") },
                          "Spotify strings are complete in \(language.rawValue)")
         }
     }
